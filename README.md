@@ -1,3 +1,3 @@
-# configure-c6
+# check-c5
 
-Small init helpers used by our start pipeline.
+Small check helpers used by our verify pipeline.
